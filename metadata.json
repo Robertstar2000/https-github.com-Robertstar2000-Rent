@@ -1,0 +1,8 @@
+{
+  "name": "TallmanRent",
+  "description": "An enterprise-grade rental and inventory management suite for streamlined operations, featuring real-time tracking, contract management, and advanced analytics.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}
