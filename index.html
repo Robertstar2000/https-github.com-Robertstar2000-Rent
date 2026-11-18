@@ -1,17 +1,53 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TallmanRent - Rental Management Suite</title>
+    <title>TallmanRent — Enterprise Tool & Equipment Rental Suite</title>
+    <meta name="description" content="Enterprise tool and equipment rental operations, Epicor P21 ERP integration, multi-point return inspection, repair work orders, and monthly consolidated billing." />
+    <meta property="og:title" content="TallmanRent — Enterprise Tool & Equipment Rental Suite" />
+    <meta property="og:description" content="Enterprise tool and equipment rental operations, Epicor P21 ERP integration, multi-point return inspection, repair work orders, and monthly consolidated billing." />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --bg-canvas: #F8FAFC;
+        --bg-surface: #FFFFFF;
+        --border-subtle: #E2E8F0;
+      }
       body {
-        font-family: 'Inter', sans-serif;
+        font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+        background-color: var(--bg-canvas);
+      }
+      h1, h2, h3, h4, .font-display {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+        letter-spacing: -0.02em;
+      }
+      .font-mono, .tabular-nums {
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      /* Crisp custom scrollbars for high-density tables & inspectors */
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #CBD5E1;
+        border-radius: 9999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94A3B8;
+      }
+      input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible {
+        outline: 2px solid #2563EB;
+        outline-offset: 1px;
       }
     </style>
   <script type="importmap">
@@ -27,9 +63,8 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
-  <body class="bg-slate-50 text-slate-900">
+  <body class="bg-[#F8FAFC] text-slate-900 antialiased selection:bg-blue-600 selection:text-white">
     <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>

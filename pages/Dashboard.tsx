@@ -1,391 +1,638 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, FileText, Activity, Clock, ArrowUpRight, ArrowDownRight, 
-  PackageCheck, Truck, X, DollarSign, ChevronRight, BarChart3, 
-  PieChart as PieIcon, ListFilter, ArrowRight
+import { useNavigate } from 'react-router-dom';
+import {
+  GitBranch,
+  ClipboardCheck,
+  ArrowUpRight,
+  FilePlus2,
+  Receipt,
+  ShieldAlert,
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  AreaChart, Area, PieChart, Pie, Cell
-} from 'recharts';
 import { useData } from '../contexts/DataContext';
-import { ContractStatus, ItemStatus } from '../types';
-
-type DetailType = 'revenue' | 'contracts' | 'utilization' | 'logistics' | null;
+import { ItemStatus, Contract, ContractStatus } from '../types';
+import { FLOW_STAGES } from './FlowChart';
+import WorkflowOversightDrawer from '../components/WorkflowOversightDrawer';
 
 const Dashboard: React.FC = () => {
-  const { contracts, inventory: items, stops } = useData();
-  const [activeDetail, setActiveDetail] = useState<DetailType>(null);
-  
-  const totalRevenue = contracts.reduce((acc, c) => acc + c.totalAmount, 0);
-  const activeContractsList = contracts.filter(c => c.status === ContractStatus.ACTIVE);
-  const activeContractsCount = activeContractsList.length;
-  const utilization = Math.round((items.filter(i => i.status === ItemStatus.RENTED).length / items.length) * 100) || 0;
-  const pendingStops = stops.filter(s => s.status !== 'Completed');
+  const navigate = useNavigate();
+  const {
+    contracts,
+    inventory: items,
+    customers,
+    workOrders,
+    replacementOrders,
+    invoices,
+    workflowIssues,
+    openReVettingModal,
+    runMonthlyBillingCycle
+  } = useData();
 
-  const stats = [
-    { id: 'revenue' as const, label: 'Total Revenue', value: `$${totalRevenue.toLocaleString()}`, change: '+12.5%', isUp: true, icon: DollarSign, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { id: 'contracts' as const, label: 'Active Contracts', value: activeContractsCount.toString(), change: '+3', isUp: true, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { id: 'utilization' as const, label: 'Asset Utilization', value: `${utilization}%`, change: '-2.1%', isUp: false, icon: Activity, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { id: 'logistics' as const, label: 'Pending Deliveries', value: pendingStops.length.toString(), change: '5 today', isUp: true, icon: Truck, color: 'text-orange-600', bg: 'bg-orange-50' },
-  ];
+  const [isOversightOpen, setIsOversightOpen] = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState<string>(
+    contracts[1]?.id || contracts[0]?.id || 'T-1002'
+  );
+  const selectedContract = contracts.find(c => c.id === selectedContractId) || contracts[0];
+  const selectedCustomer = customers.find(c => c.id === selectedContract?.customerId);
 
-  const chartData = [
-    { name: 'Mon', revenue: 1200 },
-    { name: 'Tue', revenue: 2100 },
-    { name: 'Wed', revenue: 1800 },
-    { name: 'Thu', revenue: 2800 },
-    { name: 'Fri', revenue: 3500 },
-    { name: 'Sat', revenue: 2400 },
-    { name: 'Sun', revenue: 1100 },
-  ];
+  const totalMonthlyBilled = customers.reduce(
+    (acc, c) => acc + (c.monthlyBillingTotal ?? c.balance),
+    0
+  );
+  const rentedCount = items.filter(i => i.status === ItemStatus.RENTED).length;
+  const availableCount = items.filter(i => i.status === ItemStatus.AVAILABLE).length;
+  const repairCount = items.filter(
+    i => i.status === ItemStatus.MAINTENANCE || i.status === ItemStatus.DAMAGED
+  ).length;
+  const scrappedCount = items.filter(i => i.status === ItemStatus.SCRAPPED).length;
+  const missingCount = items.filter(i => i.status === ItemStatus.MISSING).length;
+  const inspectionCount = items.filter(i => i.status === ItemStatus.INSPECTION).length;
 
-  const COLORS = ['#2563eb', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981'];
+  const totalInterestAccrued = contracts.reduce((s, c) => s + (c.interestCharged || 0), 0);
+  const totalLateFees = contracts.reduce((s, c) => s + (c.lateFeeTotal || 0), 0);
+  const totalRepairCharges = contracts.reduce((s, c) => s + (c.repairCharges || 0), 0);
+  const totalScrapAndReorder = contracts.reduce(
+    (s, c) => s + (c.scrapCharges || 0) + (c.replacementCharges || 0),
+    0
+  );
+  const totalEarlyCredits = contracts.reduce((s, c) => s + (c.earlyReturnCredit || 0), 0);
 
-  const renderDetail = () => {
-    switch (activeDetail) {
-      case 'revenue':
-        return (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-emerald-50/30">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl shadow-sm">
-                  <DollarSign size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900">Revenue Contribution Audit</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Master Ledger Drill-down</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveDetail(null)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-slate-600 shadow-sm border border-slate-100">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">High-Value Contracts</h4>
-                <div className="space-y-3">
-                  {[...contracts].sort((a, b) => b.totalAmount - a.totalAmount).slice(0, 5).map(c => (
-                    <div key={c.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-emerald-200 transition-all group">
-                      <div>
-                        <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{c.customerName}</p>
-                        <p className="text-[10px] text-slate-500 font-bold">INV: {c.id}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-emerald-600">${c.totalAmount.toLocaleString()}</p>
-                        <p className="text-[9px] text-slate-400 font-bold uppercase">{c.status}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="h-64 flex flex-col items-center justify-center bg-slate-50 rounded-[2rem] border border-slate-100 border-dashed">
-                <BarChart3 size={40} className="text-slate-200 mb-2" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Revenue by Asset Category</p>
-                <div className="w-full h-full p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10}} />
-                      <Tooltip cursor={{fill: '#f1f5f9'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)'}} />
-                      <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      case 'contracts':
-        return (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-blue-50/30">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-blue-100 text-blue-600 rounded-2xl shadow-sm">
-                  <FileText size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900">Active Operational Projects</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{activeContractsCount} LIVE AGREEMENTS</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveDetail(null)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-slate-600 shadow-sm border border-slate-100">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {activeContractsList.map(c => (
-                  <div key={c.id} className="p-5 border border-slate-100 rounded-2xl bg-white shadow-sm hover:shadow-md transition-all border-l-4 border-l-blue-500">
-                    <div className="flex justify-between items-start mb-3">
-                       <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{c.id}</span>
-                       <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1"><Clock size={10}/> {c.endDate}</span>
-                    </div>
-                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight mb-4">{c.customerName}</h4>
-                    <div className="flex items-center justify-between">
-                       <div className="flex -space-x-2">
-                         {c.items.slice(0, 3).map((_, i) => (
-                           <div key={i} className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500 shadow-sm">
-                             {i+1}
-                           </div>
-                         ))}
-                         {c.items.length > 3 && <div className="w-8 h-8 rounded-full border-2 border-white bg-blue-50 flex items-center justify-center text-[10px] font-bold text-blue-600">+{c.items.length - 3}</div>}
-                       </div>
-                       <p className="text-sm font-black text-slate-700">${c.totalAmount.toLocaleString()}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        );
-      case 'utilization':
-        const statusCounts = [
-          { name: 'Rented', value: items.filter(i => i.status === ItemStatus.RENTED).length },
-          { name: 'Available', value: items.filter(i => i.status === ItemStatus.AVAILABLE).length },
-          { name: 'Maintenance', value: items.filter(i => i.status === ItemStatus.MAINTENANCE).length },
-          { name: 'Other', value: items.filter(i => ![ItemStatus.RENTED, ItemStatus.AVAILABLE, ItemStatus.MAINTENANCE].includes(i.status)).length },
-        ];
-        return (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-purple-50/30">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl shadow-sm">
-                  <Activity size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900">Utilization Dynamics</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{utilization}% OF AGGREGATE CAPACITY</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveDetail(null)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-slate-600 shadow-sm border border-slate-100">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
-               <div className="lg:col-span-1 h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statusCounts}
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {statusCounts.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-               </div>
-               <div className="lg:col-span-2 space-y-6 flex flex-col justify-center">
-                  {statusCounts.map((status, idx) => (
-                    <div key={status.name} className="flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[idx % COLORS.length] }}></div>
-                          <span className="text-sm font-black text-slate-700 uppercase tracking-tight">{status.name}</span>
-                       </div>
-                       <div className="flex items-center gap-4">
-                          <span className="text-sm font-black text-slate-900">{status.value} Units</span>
-                          <span className="text-xs font-bold text-slate-400 w-12 text-right">{Math.round((status.value / items.length) * 100)}%</span>
-                       </div>
-                    </div>
-                  ))}
-                  <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Inventory</p>
-                     <p className="text-lg font-black text-slate-900 uppercase tracking-tighter">{items.length} Assets</p>
-                  </div>
-               </div>
-            </div>
-          </div>
-        );
-      case 'logistics':
-        return (
-          <div className="animate-in fade-in slide-in-from-top-4 duration-500 bg-white rounded-[2rem] border border-slate-200 shadow-xl overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-orange-50/30">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl shadow-sm">
-                  <Truck size={24} />
-                </div>
-                <div>
-                  <h3 className="text-xl font-black uppercase tracking-tight text-slate-900">Logistic Dispatch Status</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">{pendingStops.length} PENDING FIELD EVENTS</p>
-                </div>
-              </div>
-              <button onClick={() => setActiveDetail(null)} className="p-2 hover:bg-white rounded-full transition-all text-slate-400 hover:text-slate-600 shadow-sm border border-slate-100">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="p-8">
-               <div className="space-y-3">
-                  {pendingStops.map(stop => (
-                    <div key={stop.id} className="flex items-center justify-between p-5 bg-slate-50 border border-slate-100 rounded-2xl hover:bg-white hover:shadow-md transition-all group">
-                       <div className="flex items-center gap-5">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${stop.type === 'Delivery' ? 'bg-blue-600 text-white' : 'bg-orange-500 text-white'}`}>
-                             <Truck size={20} />
-                          </div>
-                          <div>
-                             <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{stop.customerName}</p>
-                             <p className="text-[10px] text-slate-500 font-bold truncate max-w-[200px]">{stop.address}</p>
-                          </div>
-                       </div>
-                       <div className="flex items-center gap-6">
-                          <div className="text-right">
-                             <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${
-                               stop.priority === 'High' ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-slate-100 text-slate-600 border-slate-200'
-                             }`}>
-                                {stop.priority} Priority
-                             </span>
-                             <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-tighter">{stop.status}</p>
-                          </div>
-                          <ChevronRight size={18} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
-                       </div>
-                    </div>
-                  ))}
-               </div>
-            </div>
-          </div>
-        );
-      default:
-        return null;
-    }
+  const formatTimeChip = (c: Contract) => {
+    const d = c.daysDelta ?? 0;
+    if (c.flowStage === 'Early Return') return `${Math.abs(d)}d Early`;
+    if (c.flowStage === 'Quote & Reservation') return `Starts ${Math.abs(d)}d`;
+    if (c.flowStage === 'Active On-Rent') return `${Math.abs(d)}d Rem`;
+    if (c.flowStage === 'Return Inspection') return `Dock 0d`;
+    if (c.flowStage === 'Phased Return (Off-Schedule)') return `+${d}d Off-Date`;
+    if (c.flowStage === 'Late / Overdue') return `+${d}d Late`;
+    if (c.flowStage === 'Partial Return') return `Partial ${Math.abs(d)}d`;
+    if (c.flowStage === 'Repair Shop') return `+${d}d Shop`;
+    if (c.flowStage === 'Scrap & Write-Off') return `Scrapped`;
+    return 'Settled';
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 uppercase tracking-tight">Executive Dashboard</h2>
-          <p className="text-slate-500 font-medium">Strategic oversight for TallmanRent operations.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-white border border-slate-200 rounded-xl shadow-sm flex items-center gap-2">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-            <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest">Real-time Data Sync Active</span>
+    <div className="space-y-3">
+      {/* Row 1: Unified Operations Header + 6-KPI Metric Strip */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[15px] font-display font-bold text-slate-900">
+                Operations Command Center
+              </h1>
+              <span className="text-slate-300">·</span>
+              <span className="text-xs font-medium text-slate-500">
+                Tools & Equipment Only · November 2026 Consolidated Billing
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => runMonthlyBillingCycle('November 2026')}
+              className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <Receipt size={13} className="text-slate-500" />
+              <span>Run Nov Billing</span>
+            </button>
+            <button
+              onClick={() => navigate('/new-order')}
+              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <FilePlus2 size={13} />
+              <span>+ New Order / Quote</span>
+            </button>
+            <button
+              onClick={() => navigate('/returns')}
+              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 whitespace-nowrap"
+            >
+              <ClipboardCheck size={13} />
+              <span>Returns & Repairs</span>
+            </button>
           </div>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <button 
-            key={stat.label} 
-            onClick={() => setActiveDetail(activeDetail === stat.id ? null : stat.id)}
-            className={`text-left p-6 rounded-[2rem] border transition-all hover:shadow-2xl hover:scale-[1.03] group relative overflow-hidden ${
-              activeDetail === stat.id ? 'bg-slate-900 border-slate-900 text-white shadow-2xl scale-[1.05]' : 'bg-white border-slate-200 text-slate-900 shadow-sm'
-            }`}
+        {/* 6 Crisp KPI Cells */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-y sm:divide-y-0 sm:divide-x divide-slate-100">
+          <button
+            type="button"
+            onClick={() => navigate('/customers')}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
           >
-            <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-16 -mt-16 transition-all duration-700 group-hover:scale-150 opacity-10 ${
-              activeDetail === stat.id ? 'bg-white' : stat.bg
-            }`}></div>
-            
-            <div className="flex items-center justify-between mb-6 relative z-10">
-              <div className={`p-3 rounded-2xl shadow-sm transition-colors ${
-                activeDetail === stat.id ? 'bg-white/10 text-white' : `${stat.bg} ${stat.color}`
-              }`}>
-                <stat.icon size={24} />
-              </div>
-              <div className={`flex items-center text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg ${
-                activeDetail === stat.id ? 'bg-white/10 text-white' : (stat.isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600')
-              }`}>
-                {stat.change}
-                {stat.isUp ? <ArrowUpRight size={14} className="ml-1" /> : <ArrowDownRight size={14} className="ml-1" />}
-              </div>
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">Nov Monthly Billing</span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-blue-600" />
             </div>
-            
-            <div className="relative z-10">
-              <p className={`text-[10px] font-black uppercase tracking-[0.2em] mb-1 transition-colors ${
-                activeDetail === stat.id ? 'text-slate-400' : 'text-slate-400'
-              }`}>{stat.label}</p>
-              <h3 className="text-3xl font-black tracking-tighter group-hover:translate-x-1 transition-transform">{stat.value}</h3>
-            </div>
-
-            {activeDetail === stat.id && (
-              <div className="absolute bottom-4 right-6 animate-pulse">
-                <ChevronRight size={20} className="text-slate-500" />
-              </div>
-            )}
+            <p className="text-lg font-mono font-bold tabular-nums text-emerald-700 mt-0.5">
+              ${totalMonthlyBilled.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {invoices.length} statements · {customers.length} accounts
+            </p>
           </button>
-        ))}
+
+          <button
+            type="button"
+            onClick={() => navigate('/inventory')}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">
+                Tool Inventory ({items.length})
+              </span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-blue-600" />
+            </div>
+            <p className="text-lg font-mono font-bold tabular-nums text-slate-900 mt-0.5">
+              {rentedCount} Out · {availableCount} Ready
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {inspectionCount} dock · {repairCount} shop · {scrappedCount} scrap
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/returns', { state: { contractId: 'T-1002' } })}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">
+                Multiple Dates & Late
+              </span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-amber-600" />
+            </div>
+            <p className="text-lg font-mono font-bold tabular-nums text-amber-700 mt-0.5">
+              +${(totalInterestAccrued + totalLateFees).toFixed(2)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              18% APR (${totalInterestAccrued.toFixed(2)}) + late fees
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/returns', { state: { contractId: 'T-1001' } })}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">
+                Partial & Scrap Reorders
+              </span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-purple-600" />
+            </div>
+            <p className="text-lg font-mono font-bold tabular-nums text-purple-700 mt-0.5">
+              +${totalScrapAndReorder.toLocaleString()}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {replacementOrders.length} OEM POs · {missingCount} missing
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/returns', { state: { contractId: 'T-1003' } })}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">
+                Broken Tool Repairs
+              </span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-orange-600" />
+            </div>
+            <p className="text-lg font-mono font-bold tabular-nums text-orange-700 mt-0.5">
+              +${totalRepairCharges.toFixed(2)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              {workOrders.length} WOs · labor, mat & parts
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate('/returns', { state: { contractId: 'T-1006' } })}
+            className="p-3 text-left hover:bg-slate-50/80 transition-colors group"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-slate-500">Early Return Credits</span>
+              <ArrowUpRight size={12} className="text-slate-300 group-hover:text-teal-600" />
+            </div>
+            <p className="text-lg font-mono font-bold tabular-nums text-teal-700 mt-0.5">
+              -${totalEarlyCredits.toFixed(2)}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">POR rate tier recalculation</p>
+          </button>
+        </div>
       </div>
 
-      {activeDetail && renderDetail()}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-slate-200 shadow-sm relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-50/50 rounded-full -mr-32 -mt-32 blur-3xl"></div>
-          <div className="flex items-center justify-between mb-10">
-            <div>
-              <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">Lifecycle Revenue Projection</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Rolling 7-day performance metrics</p>
+      {/* Row 1.5: AI Workflow Oversight & Exception Monitor */}
+      {workflowIssues.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+          <div className="px-4 py-2 bg-slate-50/80 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={14} className="text-rose-600" />
+              <span className="text-xs font-display font-bold text-slate-900">
+                AI Workflow Oversight &amp; Exception Alerts ({workflowIssues.length})
+              </span>
+              <span className="text-[11px] text-slate-500 hidden sm:inline">
+                · Overdue returns, &gt;61d / repeat late-payment re-vetting, damage/scrap % &amp; human input holds
+              </span>
             </div>
-            <div className="flex bg-slate-100 p-1 rounded-xl shadow-inner">
-               <button className="px-4 py-1.5 bg-white text-[10px] font-black uppercase tracking-widest text-slate-900 rounded-lg shadow-sm border border-slate-200">Weekly</button>
-               <button className="px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-slate-600 transition-colors">Monthly</button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsOversightOpen(true)}
+              className="text-[11px] font-semibold text-blue-600 hover:underline"
+            >
+              Inspect All ({workflowIssues.length}) &amp; Run Deep AI Audit →
+            </button>
           </div>
-          <div className="h-80 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData}>
-                <defs>
-                  <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#2563eb" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} dy={15} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 11, fontWeight: 'bold'}} dx={-10} />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)', padding: '16px' }}
-                  cursor={{ stroke: '#2563eb', strokeWidth: 2 }}
-                />
-                <Area type="monotone" dataKey="revenue" stroke="#2563eb" strokeWidth={4} fillOpacity={1} fill="url(#colorRev)" />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-2xl flex flex-col relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl"></div>
-          <h3 className="text-lg font-black text-white mb-8 uppercase tracking-tight flex items-center gap-3">
-             <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
-                <ListFilter size={18} className="text-white" />
-             </div>
-             Activity Log
-          </h3>
-          <div className="space-y-6 flex-1 overflow-auto pr-2 custom-scrollbar">
-            {[...contracts].reverse().slice(0, 6).map((contract) => (
-              <div key={contract.id} className="flex gap-4 group cursor-pointer">
-                <div className={`mt-1 p-2.5 rounded-2xl h-fit border transition-all group-hover:scale-110 shadow-lg ${
-                  contract.status === ContractStatus.ACTIVE ? 'bg-blue-500 border-blue-400 text-white' :
-                  contract.status === ContractStatus.RESERVATION ? 'bg-orange-500 border-orange-400 text-white' :
-                  'bg-slate-800 border-slate-700 text-slate-400'
-                }`}>
-                  {contract.status === ContractStatus.RESERVATION ? <Clock size={16} /> : <PackageCheck size={16} />}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            {workflowIssues.slice(0, 4).map(issue => (
+              <div key={issue.id} className="p-3 flex flex-col justify-between gap-2 text-xs">
+                <div>
+                  <div className="flex items-center justify-between gap-1.5 mb-1">
+                    <span
+                      className={`text-[10px] font-mono font-semibold flex items-center gap-1 ${
+                        issue.severity === 'critical'
+                          ? 'text-rose-700'
+                          : issue.severity === 'warning'
+                          ? 'text-amber-700'
+                          : 'text-blue-700'
+                      }`}
+                    >
+                      <AlertTriangle size={11} />
+                      {issue.category}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400">{issue.entityId}</span>
+                  </div>
+                  <p className="font-semibold text-slate-900 leading-snug">{issue.title}</p>
+                  <p className="text-[11px] text-slate-600 line-clamp-2 mt-0.5 leading-snug">
+                    {issue.errorMessage}
+                  </p>
+                  <p className="text-[11px] text-slate-800 line-clamp-2 mt-1 leading-snug">
+                    <strong className="text-slate-900">Fix: </strong>
+                    {issue.instructions}
+                  </p>
                 </div>
-                <div className="flex-1 border-b border-white/5 pb-4">
-                  <div className="flex justify-between items-start">
-                    <p className="text-xs font-black text-white uppercase tracking-tight">
-                      {contract.status === ContractStatus.RESERVATION ? 'New Reservation' : 'Contract Activated'}
-                    </p>
-                    <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Just Now</span>
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1 font-bold uppercase tracking-widest">{contract.customerName}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                     <span className="text-[9px] bg-white/5 px-2 py-0.5 rounded text-blue-400 font-black border border-white/5 uppercase">{contract.id}</span>
-                     <ArrowRight size={14} className="text-slate-700 group-hover:text-blue-500 transition-colors" />
-                  </div>
+                <div className="flex items-center justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (issue.requiresReVetting && issue.customerId) {
+                        const cust = customers.find(c => c.id === issue.customerId);
+                        if (cust) {
+                          openReVettingModal(cust);
+                          return;
+                        }
+                      }
+                      navigate(issue.targetRoute, {
+                        state: { contractId: issue.contractId, customerId: issue.customerId }
+                      });
+                    }}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 ${
+                      issue.requiresReVetting
+                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                        : 'bg-slate-900 hover:bg-slate-800 text-white'
+                    }`}
+                  >
+                    {issue.requiresReVetting && <UserCheck size={11} />}
+                    <span>{issue.actionLabel}</span>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
         </div>
+      )}
+
+      {/* Row 2: Main 12-Col Split — Left 7 Cols: Customer Lifecycle Flow Matrix | Right 5 Cols: Monthly Statements & Shop Queues */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-start">
+        <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+          <div className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <GitBranch size={14} className="text-blue-600" />
+              <span className="text-xs font-display font-semibold text-slate-900">
+                Customer Flow Chart (Time Horizon vs. Return Status)
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-mono text-slate-500">
+              <span>Early (-25d)</span>
+              <span className="text-slate-300">|</span>
+              <span>Dock (0d)</span>
+              <span className="text-slate-300">|</span>
+              <span>Late (+15d)</span>
+              <button
+                onClick={() => navigate('/flowchart')}
+                className="font-sans font-semibold text-blue-600 hover:underline ml-1"
+              >
+                Expand →
+              </button>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {FLOW_STAGES.filter(s => s.stage !== 'Completed & Billed').map(stageCfg => {
+              const stageContracts = contracts.filter(c => c.flowStage === stageCfg.stage);
+              const Icon = stageCfg.icon;
+              return (
+                <div
+                  key={stageCfg.stage}
+                  className="grid grid-cols-12 items-center px-3 py-2 hover:bg-slate-50/70 transition-colors"
+                >
+                  <div className="col-span-4 pr-3 border-r border-slate-100">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono text-slate-400">
+                        {stageCfg.stepNum}
+                      </span>
+                      <Icon size={13} className="text-slate-600 shrink-0" />
+                      <span className="text-xs font-semibold text-slate-900 truncate">
+                        {stageCfg.label}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate pl-5">
+                      {stageCfg.billingRule}
+                    </p>
+                  </div>
+
+                  <div className="col-span-8 pl-3 flex flex-wrap items-center gap-1.5">
+                    {stageContracts.length === 0 ? (
+                      <span className="text-[11px] text-slate-400 italic">No contracts in stage</span>
+                    ) : (
+                      stageContracts.map(c => {
+                        const isSel = selectedContract?.id === c.id;
+                        const isQuote = c.status === ContractStatus.QUOTE;
+                        return (
+                          <button
+                            key={c.id}
+                            onClick={() => setSelectedContractId(c.id)}
+                            className={`text-left px-2.5 py-1.5 rounded-lg border text-xs transition-all flex items-center gap-2 ${
+                              isSel
+                                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                                : isQuote
+                                ? 'bg-yellow-300 text-slate-950 border-yellow-500 font-semibold hover:bg-yellow-400'
+                                : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400'
+                            }`}
+                          >
+                            {isQuote && (
+                              <span className="px-1.5 py-0.5 bg-yellow-400 text-slate-950 border border-yellow-600 rounded font-extrabold text-[10px] leading-none">
+                                QUOTE
+                              </span>
+                            )}
+                            <span
+                              className={`font-mono text-[11px] font-semibold ${
+                                isSel ? 'text-blue-300' : isQuote ? 'text-slate-950' : 'text-blue-600'
+                              }`}
+                            >
+                              {c.id}
+                            </span>
+                            <span className="font-semibold truncate max-w-[145px]">
+                              {c.customerName}
+                            </span>
+                            <span
+                              className={`font-mono text-[10px] ${
+                                isSel ? 'text-slate-300' : 'text-slate-500'
+                              }`}
+                            >
+                              {formatTimeChip(c)} · ${c.totalAmount.toLocaleString()}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {selectedContract && (
+            <div className="bg-slate-50/80 border-t border-slate-200 px-3.5 py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {selectedContract.status === ContractStatus.QUOTE && (
+                    <span className="px-1.5 py-0.5 bg-yellow-300 text-slate-950 border border-yellow-500 rounded font-extrabold text-[10px]">
+                      QUOTE
+                    </span>
+                  )}
+                  <span className="font-mono font-bold text-blue-600">{selectedContract.id}</span>
+                  <span className="font-semibold text-slate-900">
+                    {selectedContract.customerName}
+                  </span>
+                  <span className="text-slate-300">·</span>
+                  <span className="text-[11px] text-slate-600">
+                    {selectedContract.flowStage === 'Phased Return (Off-Schedule)'
+                      ? 'Multiple Return Dates'
+                      : selectedContract.flowStage}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-600 truncate mt-0.5">
+                  {selectedCustomer?.latestCustomerUpdate || selectedContract.notes}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  onClick={() =>
+                    navigate('/contracts', { state: { contractId: selectedContract.id } })
+                  }
+                  className="px-2.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-medium rounded-lg whitespace-nowrap"
+                >
+                  Open Contract
+                </button>
+                <button
+                  onClick={() =>
+                    navigate('/returns', { state: { contractId: selectedContract.id } })
+                  }
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-semibold rounded-lg whitespace-nowrap"
+                >
+                  Inspect / Process →
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Right 5 Cols: Monthly Consolidated Billing & Shop Queues */}
+        <div className="lg:col-span-5 space-y-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+            <div className="px-3.5 py-2.5 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-display font-semibold text-slate-900">
+                Nov 2026 Monthly Customer Billing & Latest Updates
+              </span>
+              <button
+                onClick={() => navigate('/customers')}
+                className="text-[11px] text-blue-600 hover:underline font-semibold"
+              >
+                All Accounts →
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100 max-h-[268px] overflow-y-auto">
+              {customers.map(c => (
+                <div
+                  key={c.id}
+                  onClick={() => navigate('/customers', { state: { customerId: c.id } })}
+                  className="px-3.5 py-2 hover:bg-slate-50 cursor-pointer flex items-start justify-between gap-2.5 transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-semibold text-slate-900 truncate">
+                        {c.name}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                        {c.lastUpdatedAt?.split(' ')[0]}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-600 line-clamp-1 mt-0.5">
+                      {c.latestCustomerUpdate}
+                    </p>
+                  </div>
+                  <div className="text-right font-mono tabular-nums shrink-0">
+                    <span className="text-xs font-semibold text-slate-900 block">
+                      $
+                      {(c.monthlyBillingTotal ?? c.balance).toLocaleString(undefined, {
+                        minimumFractionDigits: 2
+                      })}
+                    </span>
+                    <span
+                      className={`text-[10px] font-sans font-medium ${
+                        c.accountStatus === 'Credit Hold'
+                          ? 'text-rose-600'
+                          : c.accountStatus === 'Watchlist'
+                          ? 'text-amber-600'
+                          : 'text-emerald-600'
+                      }`}
+                    >
+                      {c.accountStatus}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Repair Work Orders & Replacement POs */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+            <div className="px-3.5 py-2.5 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+              <span className="text-xs font-display font-semibold text-slate-900">
+                Repair Work Orders & Replacement POs ({workOrders.length + replacementOrders.length})
+              </span>
+              <button
+                onClick={() => navigate('/returns')}
+                className="text-[11px] text-blue-600 hover:underline font-semibold"
+              >
+                Open Workbench →
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {workOrders.map(wo => (
+                <div
+                  key={wo.id}
+                  onClick={() => navigate('/returns')}
+                  className="px-3.5 py-2 hover:bg-slate-50 cursor-pointer flex items-center justify-between gap-2 text-xs transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="font-mono font-semibold text-orange-700">{wo.id}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="font-semibold text-slate-900 truncate">{wo.itemName}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {wo.customerName} ·{' '}
+                      {wo.disposition === 'Scrap'
+                        ? 'Scrapped (BER)'
+                        : `Labor ${wo.laborHours}h · Mat $${wo.materialsCost} · ${wo.parts.length} parts`}
+                    </p>
+                  </div>
+                  <span className="font-mono text-xs font-semibold text-slate-900 shrink-0 tabular-nums">
+                    +${wo.totalCost.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+              {replacementOrders.map(ro => (
+                <div
+                  key={ro.id}
+                  onClick={() => navigate('/returns')}
+                  className="px-3.5 py-2 hover:bg-slate-50 cursor-pointer flex items-center justify-between gap-2 text-xs transition-colors"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span className="font-mono font-semibold text-purple-700">{ro.id}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="font-semibold text-slate-900 truncate">{ro.itemName}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">
+                      {ro.customerName} · {ro.reason} · {ro.poNumber}
+                    </p>
+                  </div>
+                  <span className="font-mono text-xs font-semibold text-purple-700 shrink-0 tabular-nums">
+                    +${ro.totalBilledToCustomer.toFixed(2)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Row 3: Serialized Tool & Equipment Inventory Snapshot */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-[0_1px_2px_rgba(15,23,42,0.03)] overflow-hidden">
+        <div className="px-4 py-2.5 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
+          <span className="text-xs font-display font-semibold text-slate-900">
+            Serialized Tool & Equipment Inventory ({items.length} Units)
+          </span>
+          <button
+            onClick={() => navigate('/inventory')}
+            className="text-[11px] font-semibold text-blue-600 hover:underline"
+          >
+            Full Tool Catalog →
+          </button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50/60 border-b border-slate-100 text-[11px] font-medium text-slate-500">
+              <tr>
+                <th className="px-3.5 py-2">ID & Serial</th>
+                <th className="px-3 py-2">Tool Name</th>
+                <th className="px-3 py-2">Category</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2 text-right">Rates (D / W / M)</th>
+                <th className="px-3 py-2 text-right">MSRP</th>
+                <th className="px-3.5 py-2">Location</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {items.slice(0, 8).map(tool => (
+                <tr
+                  key={tool.id}
+                  onClick={() => navigate('/inventory', { state: { itemId: tool.id } })}
+                  className="hover:bg-slate-50 cursor-pointer transition-colors"
+                >
+                  <td className="px-3.5 py-2 font-mono text-[11px] font-semibold text-blue-600 whitespace-nowrap">
+                    {tool.id} · {tool.serialNumber}
+                  </td>
+                  <td className="px-3 py-2 font-medium text-slate-900">{tool.name}</td>
+                  <td className="px-3 py-2 text-slate-600">{tool.category}</td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{tool.status}</td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums text-[11px] text-slate-700 whitespace-nowrap">
+                    ${tool.rate} / ${tool.weeklyRate} / ${tool.monthlyRate}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono tabular-nums font-semibold text-slate-900">
+                    ${tool.replacementCost.toLocaleString()}
+                  </td>
+                  <td className="px-3.5 py-2 text-slate-500 truncate max-w-[180px]">
+                    {tool.location}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <WorkflowOversightDrawer
+        isOpen={isOversightOpen}
+        onClose={() => setIsOversightOpen(false)}
+      />
     </div>
   );
 };
